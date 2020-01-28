@@ -1,0 +1,228 @@
+---
+title: "R3 Model - Quick Start"
+author: "Benjamin Ortiz Ulloa"
+date: "1/28/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Getting Started
+
+First make sure you set your **R** working directory is set to the 
+
+```{r, eval=F}
+setwd('path/to/r3-model')
+```
+
+Then ensure you have all the main package dependencies we'll use
+
+```{r, eval=F}
+install.packages(c(
+  'dplyr',
+  'ggplot2',
+  'igraph',
+  'magrittr',
+  'purrr',
+  'tidyr'
+))
+```
+
+Then make sure to import the relevant functions to your R environment
+
+```{r}
+source('r3-model.R')
+```
+
+# Initializing elements
+
+We first need to initialize the actors/nodes we'll be using. The different types of nodes will represent **people** actors that can get addicted or recover, **rehabs** where an addicted person can recover from addiction, and **postRehab** where people go when they leave rehab and have a chance of relapsing.
+
+```{r}
+set.seed(4321) #setting the seed ensures that we obtain the same results
+
+testNodes <- initializeNodes(nPeople = 1000,
+                             nRehab = 20,
+                             nPostRehab = 2,
+                             ratePostRehab = c(.2, .8))
+
+#purrr::map is a function that allows you to iterate over a list with another fucntion
+#head is a function that give the top 6 rows of any data frame
+purrr::map(testNodes, head)
+```
+
+The rate of a **rehab** corresponds to the probability that an addict will recover while in its facilities. The rate of a **postRehab**, however, corresponds to the probability that an addict will relapse and return to a **rehab**.
+
+If the *ratePostRehab* parameter is not set, then the **relapse rate** of the post rehab center will be set to a random number between 0 and 1. 
+
+We now need to create the edge list, which connects a *person* to either a *rehab facility* or a **post rehab facility**.
+
+```{r}
+set.seed(4321)
+testEdges <- initializeEdges(testNodes)
+
+head(testEdges)
+```
+
+**fromStabilized** refers to whether the person (*the source/from node*) is actively using drugs or not. **toType** refers to the the type of facility (*the target/to node*) the person is residing in. The **rate** refers to the probability of recovery if the **toType** is *rehab* or it refers to the probability of relapse if the **toType** is *postRehab*.
+
+# Simulations
+
+## noIntervention
+
+The null model will be called using the `noIntervention` function. This essentially sees the system behave with no major changes to the facilities. 
+
+```{r, warning=F}
+set.seed(4321)
+nullModel <- noIntervention(edgeList = testEdges, 
+                            nodeList = testNodes, 
+                            nTime = 100)
+head(nullModel)
+```
+
+What we get is data frame with each row representing a new turn in the simulation. The parameter **nTime** sets the amount of turns taken in a simulation. 
+
+**nStable** represents the number of stablized actors in the system. **pPostRecovery** and **pRehab** is the percentage of actors in *postRecovery* and *rehab* facilities respectively. *g* is an igraph object that holds a graphical representation of the system during each turn. 
+
+This single simulation can be quickly viewed using **ggplot2**
+
+```{r}
+library(ggplot2)
+ggplot(data = nullModel) +
+  geom_line(aes(x = time, y = pStable)) +
+  labs(title = 'Single Simulation of the Null Model',
+       y = '% stable')
+```
+
+We can also run multiple iterations of the model.
+
+```{r}
+#must wrap the model in a function
+nullModelFunc <- function(){
+  noIntervention(edgeList = testEdges,
+                 nodeList = testNodes,
+                 nTime = 100)
+}
+
+set.seed(4321)
+nullModelIterations <- iterateSim(nIter = 20,
+                                  fun = nullModelFunc)
+
+head(nullModelIterations)
+```
+
+```{r}
+ggplot(nullModelIterations) +
+  geom_line(aes(x = time, y = pStable, group = iteration)) +
+  labs(title = '20 Simulations of the Null Model',
+      y = '% Stable')
+```
+
+We can clean up the visualization by getting the mean *% stable population* of all models at any give time **t**
+
+```{r}
+library(magrittr)
+
+nullModelIterationsAve <- nullModelIterations %>%
+  dplyr::group_by(time) %>%
+  dplyr::summarise(pStable = mean(pStable)) 
+
+head(nullModelIterationsAve)
+```
+
+```{r}
+ggplot(data = nullModelIterationsAve) +
+  geom_line(aes(x = time, y = pStable)) +
+  labs(title = 'Average of 20 Iterations of the Null Model',
+       y = '% stable')
+```
+
+
+## replacementIntervention
+
+```{r}
+set.seed(4321)
+replacementModel <- replacementIntervention(edgeList = testEdges, 
+                                            nodeList = testNodes, 
+                                            nTime = 100,
+                                            interventionFreq = 5)
+```
+
+The parameter **interventionFreq** replaces a rehab facility ever *n* turns. The rehab facility that is replaced is the one with the worst recovery rate. We replace it with one that has a recovery rate between the worst and best rates of the rehabs.
+
+```{r}
+ggplot(data = replacementModel) +
+  geom_line(aes(x = time, y = pStable)) +
+  labs(title = 'Single Simulation of the Replacement Model',
+       y = '% stable')
+```
+
+```{r}
+replacementModelFunc <- function(){
+  replacementModel <- replacementIntervention(edgeList = testEdges, 
+                                            nodeList = testNodes, 
+                                            nTime = 100,
+                                            interventionFreq = 5)
+}
+
+set.seed(4321)
+replacementModelIterations <- iterateSim(nIter = 20,
+                                         fun = replacementModelFunc)
+```
+
+```{r}
+ggplot(replacementModelIterations) +
+  geom_line(aes(x = time, y = pStable, group = iteration)) +
+  labs(title = '20 Simulations of the Replacement Model',
+       y = '% stable')
+```
+
+```{r}
+replacementModelIterationsAve <- replacementModelIterations %>%
+  dplyr::group_by(time) %>%
+  dplyr::summarise(pStable = mean(pStable)) 
+
+ggplot(data = replacementModelIterationsAve) +
+  geom_line(aes(x = time, y = pStable)) +
+  labs(title = 'Average of 20 Iterations of the Replacement Model',
+       y = '% stable')
+```
+
+# Utilizing networks - a possible extension
+
+The model takes advantage of a bipartite structure. There are people and they are connected to facilities (either rehabs or postRehabs). These bipartite graphs also have start structures since a person can only be in one facility, while a facility can hold many people. If we project the bipartite graph into one that only observes indirect **people -- people** connections, then we would get *n* fully connected subgraphs - where *n* is the combined number of rehab and postRehab facilities. 
+
+Let's take a look at one of the graphs we preserved during our simulation
+
+```{r}
+exampleGraph <- replacementModel$g[[5]] #let's pull the graph from the 5th turn 
+
+p2p <- people2people(g = exampleGraph) #let's get rid of the star structure and make direct connections
+
+plot(p2p, vertex.size = 2, vertex.label = '', edge.arrow.mode = 0)
+```
+
+What could be interesting, is if we restructure these fully connected subgraphs into something more realistic. We can do this by removing random edges from the graph.
+
+```{r}
+set.seed(4321)
+stochasticStructure <- removeRandomEdges(g = p2p,
+                                         toRemove = .75) #remove 75% of edges
+
+stochasticCommunities <- observeCommunities(stochasticStructure)
+```
+
+Removing random edges in these subcommunities makes assumes that people in a facility are not actually connected to everyone else int he facility. But instead, interact with only a few people within the facility. 
+The `observeCommunities` function provides a list of subgraphs. There are `r length(stochasticCommunities)` at this turn of the simulation. Let's take a look at one of them
+
+```{r}
+#change the number in the [[]] to look at a different subgraph
+plot(stochasticCommunities[[5]], 
+     vertex.size = 2, 
+     vertex.label = '', 
+     edge.arrow.mode = 0)
+```
+
+These subgraph structures could help us with the simulation. As of now, a person's probabilty of relapsing or recoverying is wholey dependent on outside sources (the rates of the facilities). Maybe we can provide an attribute to the individual person which can buffer the rates of the facilities. This attribute could also be influenced by one's neighbors - maybe a form of social contagion. 
