@@ -1,0 +1,32 @@
+---
+title: "R3 Model - Description"
+author: "Benjamin Ortiz Ulloa"
+date: "2/20/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Abstract
+
+We propose a stochastic network-based model to represents the movement of addicts in and out of rehab facilities. The model takes advantage of a temporal bipartite network to create a system we can manipulate and observe. We seek to better classify rehabs and rank rehab facilities according to their effectiveness in preventing the relapse of recovering addicts.
+
+## Structure
+
+### Bipartite
+
+The two node types that create the bipartite structure are **People** nodes and **Location** nodes. The edges connecting the two node types represent where a person is located. 
+
+The **People** nodes contain a boolean attribute of *stable* which represents whether a person is a recovering addict and is not using drugs (TRUE) or if a person is a relapsed addict and is using drugs (FALSE). 
+
+The **Location** nodes are subdivided into two types: *Rehab Facilities* and *Post-Rehab Locations*. Rehab facilities are locations where people go to when they relapse and start using drugs again. Post-Rehab facilities are locations where people go to when they either recover or are no longer able to stay at the rehab. Each location contains a *rate* attribute which is a number between 0 and 1. The meaning of rate depends on a location's subtype. For rehab facilities, the rate represents the probability that a connected person will recover and stop using drugs. For post-rehab locations, the rate represents the probability that a connected person will relapse and start using drugs again. 
+
+### Temporal
+
+The temporal element of the network consists of a controlled update of the *stable* attribute of **People** nodes and a controlled rewiring of the edges. Time steps are arbitrary, but consistent, lengths of time.
+
+At each time step we choose a random number between 0 and 1 for each **People** node. If the person is connected to a *Rehab Facility*, then we change the person's *stable* attribute to TRUE if the random number is below the corresponding location's rate. If the person is connected to a *Post-Rehab Location*, then we change the person's *stable* attribute to FALSE if the random number is below the corresponding location's rate.
+
+At each time step we rewire the edges according to the attached **People** nodes' new *stable* attribute and the attached **Location** nodes' subtype. If a person connected to a *Post-Rehab Location* has a new *stable* status of FALSE, then we randomly choose a *Rehab Facility* to reconnect the person to. If a person is connected to a *Rehab Facility*, then we randomly choose a *Post-Rehab Location* to reconnect the person to despite the person's *stable* status (we assume a finite amount of time spent at a rehab facility). 

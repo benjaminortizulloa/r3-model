@@ -121,6 +121,15 @@ rehabTurn <- function(rehabEdges, postRehabNodes){
   )
 }
 
+updateVertices <- function(g){
+  people <- igraph::V(g)[type == 'person']
+  isStable = purrr::map_lgl(igraph::incident_edges(g, people), function(e){
+    e$fromStabilized
+  })
+  igraph::V(g)[people]$stable <- isStable
+  g
+}
+
 #single turn of the model - rewires people to new locations
 #ouputs an updated edgelist
 #el : edge list. First iteration should be the output of `initializeEdges`
@@ -147,8 +156,11 @@ summaryTable <- function(el, nodeList){
   #create a graph representation of system
   g <- igraph::graph_from_data_frame(el, T, nl)
   
+  #update nodes with status
+  g <- updateVertices(g)
+  
   tibble::tibble(
-    nStable = sum(el$fromStabilized),
+    nStable = sum(igraph::V(g)$stable, na.rm = T),
     nTotal = nrow(el),
     pStable = nStable/nTotal,
     pPostRecovery = sum(el$toType == 'postRehab')/nTotal,
